@@ -20,3 +20,4 @@ prediction/
 *.pdf
 comandi.txt
 *.zip
+sklearn-env/

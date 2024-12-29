@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from collections import deque
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw,ImageFont
 from model import TrackNet, InpaintNet
 
 # Global variables
@@ -224,7 +224,7 @@ def generate_frames(video_file):
             
     return frame_list
 
-def draw_traj(img, traj, radius=3, color='red'):
+def draw_traj(img, traj, radius=3, color='red',fill='rgb(255,255,255)',text=''):
     """ Draw trajectory on the image.
 
         Args:
@@ -236,15 +236,28 @@ def draw_traj(img, traj, radius=3, color='red'):
     """
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)   
     img = Image.fromarray(img)
-    
+    font = ImageFont.truetype(font='./Roboto-Regular.ttf',size=30)
+    img_width, img_height = img.size
     for i in range(len(traj)):
         if traj[i] is not None:
             draw_x = traj[i][0]
             draw_y = traj[i][1]
+            outlier = traj[i][2] if len(traj[i])>2 else None 
             bbox =  (draw_x - radius, draw_y - radius, draw_x + radius, draw_y + radius)
             draw = ImageDraw.Draw(img)
-            draw.ellipse(bbox, fill='rgb(255,255,255)', outline=color)
+            if outlier is not None:
+                if(outlier==-1):
+                    fill='rgb(204, 51, 0)'
+                    color='red'
+                else:
+                    fill='rgb(102, 255, 102)'
+                    color='green'
+            draw.ellipse(bbox, fill=fill, outline=color)
             del draw
+    draw=ImageDraw.Draw(img)
+    # Draw the text near the point (offset by a fixed amount from the center of the circle)
+    draw.text((img_width-200,img_height-200), text, fill='rgb(255,255,255)',font=font)
+    del draw
     img =  cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
     return img
@@ -277,7 +290,7 @@ def write_pred_video(video_file, pred_dict, save_file, traj_len=8, label_df=None
         f_i, x, y, vis = label_df['Frame'], label_df['X'], label_df['Y'], label_df['Visibility']
     
     # Read prediction result
-    x_pred, y_pred, vis_pred = pred_dict['X'], pred_dict['Y'], pred_dict['Visibility']
+    x_pred, y_pred, vis_pred,outlier_pred= pred_dict['X'], pred_dict['Y'], pred_dict['Visibility'],pred_dict['Outlier']
 
     # Video config
     out = cv2.VideoWriter(save_file, fourcc, fps, (w, h))
@@ -304,15 +317,13 @@ def write_pred_video(video_file, pred_dict, save_file, traj_len=8, label_df=None
         # Push ball coordinates for each frame
         if label_df is not None:
             gt_queue.appendleft([x[i], y[i]]) if vis[i] and i < len(label_df) else gt_queue.appendleft(None)
-        pred_queue.appendleft([x_pred[i], y_pred[i]]) if vis_pred[i] else pred_queue.appendleft(None)
+        pred_queue.appendleft([x_pred[i], y_pred[i],outlier_pred[i]]) if vis_pred[i] else pred_queue.appendleft(None)
 
         # Draw ground truth trajectory if exists
         if label_df is not None:
             frame = draw_traj(frame, gt_queue, color='red')
         
-        # Draw prediction trajectory
-        frame = draw_traj(frame, pred_queue, color='yellow')
-
+        frame = draw_traj(frame, pred_queue,text=str(i))
         out.write(frame)
         i+=1
 
@@ -350,7 +361,9 @@ def write_pred_csv(pred_dict, save_file, save_inpaint_mask=False):
         pred_df = pd.DataFrame({'Frame': pred_dict['Frame'],
                                 'Visibility': pred_dict['Visibility'],
                                 'X': pred_dict['X'],
-                                'Y': pred_dict['Y']})
+                                'Y': pred_dict['Y'],
+                                'Bounced':pred_dict['Bounce'],
+                                'Outlier':pred_dict['Outlier']})
     pred_df.to_csv(save_file, index=False)
     
 def convert_gt_to_coco_json(data_dir, split, drop=False):

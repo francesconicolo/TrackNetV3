@@ -10,6 +10,7 @@ from test import predict_location, get_ensemble_weight, generate_inpaint_mask
 from dataset import Shuttlecock_Trajectory_Dataset, Video_IterableDataset
 from utils.general import *
 
+from utils.outlier_algo import dataAnalysis
 
 def predict(indices, y_pred=None, c_pred=None, img_scaler=(1, 1)):
     """ Predict coordinates from heatmap or inpainted coordinates. 
@@ -25,7 +26,7 @@ def predict(indices, y_pred=None, c_pred=None, img_scaler=(1, 1)):
                 Format: {'Frame':[], 'X':[], 'Y':[], 'Visibility':[]}
     """
 
-    pred_dict = {'Frame':[], 'X':[], 'Y':[], 'Visibility':[]}
+    pred_dict = {'Frame':[], 'X':[], 'Y':[], 'Visibility':[],'Bounce':[]}
 
     batch_size, seq_len = indices.shape[0], indices.shape[1]
     indices = indices.detach().cpu().numpy()if torch.is_tensor(indices) else indices.numpy()
@@ -62,11 +63,15 @@ def predict(indices, y_pred=None, c_pred=None, img_scaler=(1, 1)):
                 pred_dict['X'].append(cx_pred)
                 pred_dict['Y'].append(cy_pred)
                 pred_dict['Visibility'].append(vis_pred)
+                pred_dict['Bounce'].append(0)
+
                 prev_f_i = f_i
             else:
                 break
     
     return pred_dict    
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -81,6 +86,8 @@ if __name__ == '__main__':
     parser.add_argument('--large_video', action='store_true', default=False, help='whether to process large video')
     parser.add_argument('--output_video', action='store_true', default=False, help='whether to output video with predicted trajectory')
     parser.add_argument('--traj_len', type=int, default=8, help='length of trajectory to draw on video')
+    parser.add_argument('--algorithm', type=str, default='isolationForest',choices=['isolationForest', 'dbscan','lof','kMeans','oneClassSVM','knn'], help='Algorithm for scan dataset')
+    
     args = parser.parse_args()
 
     num_workers = args.batch_size if args.batch_size <= 16 else 16
@@ -88,11 +95,13 @@ if __name__ == '__main__':
     video_name = video_file.split('/')[-1][:-4]
     video_range = args.video_range if args.video_range else None
     large_video = args.large_video
-    out_csv_file = os.path.join(args.save_dir, f'{video_name}_ball.csv')
-    out_video_file = os.path.join(args.save_dir, f'{video_name}.mp4')
-
+    algorithm =args.algorithm
+    out_csv_file = os.path.join(args.save_dir, f'{video_name}/{video_name}_ball_{algorithm}.csv')
+    out_video_file = os.path.join(args.save_dir, f'{video_name}/{video_name}_{algorithm}.mp4')
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
+    os.makedirs(os.path.dirname(out_csv_file), exist_ok=True)
+    os.makedirs(os.path.dirname(out_video_file), exist_ok=True)
     
     # Load model
     tracknet_ckpt = torch.load(args.tracknet_file)
@@ -114,7 +123,7 @@ if __name__ == '__main__':
     w_scaler, h_scaler = w / WIDTH, h / HEIGHT
     img_scaler = (w_scaler, h_scaler)
 
-    tracknet_pred_dict = {'Frame':[], 'X':[], 'Y':[], 'Visibility':[], 'Inpaint_Mask':[],
+    tracknet_pred_dict = {'Frame':[], 'X':[], 'Y':[], 'Visibility':[], 'Inpaint_Mask':[],'Bounce':[],
                         'Img_scaler': (w_scaler, h_scaler), 'Img_shape': (w, h)}
 
     # Test on TrackNet
@@ -214,7 +223,8 @@ if __name__ == '__main__':
         inpaintnet.eval()
         seq_len = inpaintnet_seq_len
         tracknet_pred_dict['Inpaint_Mask'] = generate_inpaint_mask(tracknet_pred_dict, th_h=h*0.05)
-        inpaint_pred_dict = {'Frame':[], 'X':[], 'Y':[], 'Visibility':[]}
+        # successivamente verrà aggiunto il campo outlier
+        inpaint_pred_dict = {'Frame':[], 'X':[], 'Y':[], 'Visibility':[],'Bounce':[]}
 
         if args.eval_mode == 'nonoverlap':
             # Create dataset with non-overlap sampling
@@ -303,6 +313,9 @@ if __name__ == '__main__':
 
     # Write csv file
     pred_dict = inpaint_pred_dict if inpaintnet is not None else tracknet_pred_dict
+
+    # Aggiunge la colonna outliers in base al metodo di analisi passato
+    pred_dict=dataAnalysis(pred_dict,video_name,algorithm)
     write_pred_csv(pred_dict, save_file=out_csv_file)
 
     # Write video with predicted coordinates
