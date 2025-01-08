@@ -26,7 +26,7 @@ def predict(indices, y_pred=None, c_pred=None, img_scaler=(1, 1)):
                 Format: {'Frame':[], 'X':[], 'Y':[], 'Visibility':[]}
     """
 
-    pred_dict = {'Frame':[], 'X':[], 'Y':[], 'Visibility':[],'Bounce':[]}
+    pred_dict = {'Frame':[], 'X':[], 'Y':[], 'Visibility':[]}
 
     batch_size, seq_len = indices.shape[0], indices.shape[1]
     indices = indices.detach().cpu().numpy()if torch.is_tensor(indices) else indices.numpy()
@@ -63,7 +63,6 @@ def predict(indices, y_pred=None, c_pred=None, img_scaler=(1, 1)):
                 pred_dict['X'].append(cx_pred)
                 pred_dict['Y'].append(cy_pred)
                 pred_dict['Visibility'].append(vis_pred)
-                pred_dict['Bounce'].append(0)
 
                 prev_f_i = f_i
             else:
@@ -86,7 +85,7 @@ if __name__ == '__main__':
     parser.add_argument('--large_video', action='store_true', default=False, help='whether to process large video')
     parser.add_argument('--output_video', action='store_true', default=False, help='whether to output video with predicted trajectory')
     parser.add_argument('--traj_len', type=int, default=8, help='length of trajectory to draw on video')
-    parser.add_argument('--algorithm', type=str, default='isolationForest',choices=['isolationForest', 'dbscan','lof','kMeans','oneClassSVM','knn'], help='Algorithm for scan dataset')
+    parser.add_argument('--algorithm', type=str, default='custom',choices=['isolationForest','custom','dbscan','lof','kMeans','oneClassSVM','knn','customOutlier'], help='Algorithm for scan dataset')
     
     args = parser.parse_args()
 
@@ -123,7 +122,7 @@ if __name__ == '__main__':
     w_scaler, h_scaler = w / WIDTH, h / HEIGHT
     img_scaler = (w_scaler, h_scaler)
 
-    tracknet_pred_dict = {'Frame':[], 'X':[], 'Y':[], 'Visibility':[], 'Inpaint_Mask':[],'Bounce':[],
+    tracknet_pred_dict = {'Frame':[], 'X':[], 'Y':[], 'Visibility':[], 'Inpaint_Mask':[],
                         'Img_scaler': (w_scaler, h_scaler), 'Img_shape': (w, h)}
 
     # Test on TrackNet
@@ -224,7 +223,7 @@ if __name__ == '__main__':
         seq_len = inpaintnet_seq_len
         tracknet_pred_dict['Inpaint_Mask'] = generate_inpaint_mask(tracknet_pred_dict, th_h=h*0.05)
         # successivamente verrà aggiunto il campo outlier
-        inpaint_pred_dict = {'Frame':[], 'X':[], 'Y':[], 'Visibility':[],'Bounce':[]}
+        inpaint_pred_dict = {'Frame':[], 'X':[], 'Y':[], 'Visibility':[]}
 
         if args.eval_mode == 'nonoverlap':
             # Create dataset with non-overlap sampling
