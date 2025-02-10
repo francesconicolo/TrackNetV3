@@ -21,3 +21,4 @@ prediction/
 comandi.txt
 *.zip
 sklearn-env/
+trueLabels/

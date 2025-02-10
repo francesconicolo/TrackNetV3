@@ -1,6 +1,98 @@
 import math
 import pandas as pd
 
+#intorno per indicare il cambio di Y
+limitYVariation=8
+#limiti per la creazione dell'angolo 
+limitDegrees=40
+limitSumDistanceDegrees=15
+limitSingleDistanceDegrees=3
+limitCollapse=8
+#calcolo dello smash
+limitChange = 40 # La variazione percentuale minima per considerare uno smash
+limitXVariation = 30 #limite per la variazione orizzontale
+minDistance=40 # variazione fissa
+
+# Funzione per impostare i parametri in base al preset
+def setPreset(preset):
+    global limitDegrees, limitYVariation, limitSumDistanceDegrees, limitSingleDistanceDegrees,limitCollapse,limitChange, limitXVariation, minDistance
+    if preset == 1:
+        #intorno per indicare il cambio di Y
+        limitYVariation=5
+        #limiti per la creazione dell'angolo 
+        limitDegrees=40
+        limitSumDistanceDegrees=15
+        limitSingleDistanceDegrees=2
+        limitCollapse=4
+        #calcolo dello smash
+        limitChange = 40 # La variazione percentuale minima per considerare uno smash
+        limitXVariation = 30 #limite per la variazione orizzontale
+        minDistance=40 # variazione fissa
+    elif preset==2:
+        #intorno per indicare il cambio di Y
+        limitYVariation=5
+        #limiti per la creazione dell'angolo 
+        limitDegrees=35
+        limitSumDistanceDegrees=15
+        limitSingleDistanceDegrees=6
+        limitCollapse=10
+        #calcolo dello smash
+        limitChange = 30 # La variazione percentuale minima per considerare uno smash
+        limitXVariation = 30 #limite per la variazione orizzontale
+        minDistance=40 # variazione fissa
+    elif preset==3:
+        #intorno per indicare il cambio di Y
+        limitYVariation=6
+        #limiti per la creazione dell'angolo 
+        limitDegrees=40
+        limitSumDistanceDegrees=15
+        limitSingleDistanceDegrees=6
+        limitCollapse=15
+        #calcolo dello smash
+        limitChange = 35 # La variazione percentuale minima per considerare uno smash
+        limitXVariation = 30 #limite per la variazione orizzontale
+        minDistance=40 # variazione fissa
+    elif preset==4:
+        #intorno per indicare il cambio di Y
+        limitYVariation=8
+        #limiti per la creazione dell'angolo 
+        limitDegrees=38
+        limitSumDistanceDegrees=13
+        limitSingleDistanceDegrees=5
+        limitCollapse=14
+        #calcolo dello smash
+        limitChange = 34 # La variazione percentuale minima per considerare uno smash
+        limitXVariation = 25 #limite per la variazione orizzontale
+        minDistance=39 # variazione fissa
+    elif preset==5:
+        #intorno per indicare il cambio di Y
+        limitYVariation=8
+        #limiti per la creazione dell'angolo 
+        limitDegrees=40
+        limitSumDistanceDegrees=13
+        limitSingleDistanceDegrees=7
+        limitCollapse=17
+        #calcolo dello smash
+        limitChange = 35 # La variazione percentuale minima per considerare uno smash
+        limitXVariation = 30 #limite per la variazione orizzontale
+        minDistance=40 # variazione fissa
+    elif preset==6:
+        #intorno per indicare il cambio di Y
+        limitYVariation=5
+        #limiti per la creazione dell'angolo 
+        limitDegrees=40
+        limitSumDistanceDegrees=13
+        limitSingleDistanceDegrees=5
+        limitCollapse=10
+        #calcolo dello smash
+        limitChange = 38 # La variazione percentuale minima per considerare uno smash
+        limitXVariation = 30 #limite per la variazione orizzontale
+        minDistance=40 # variazione fissa
+    else:
+        print("Preset non valido")
+
+
+
 def distanceCalculator(A,B):
     distance =  math.sqrt((A[0]-B[0])**2 + (A[1]-B[1])**2)
     return distance
@@ -28,10 +120,7 @@ def checkSmash(A,B,C):
         percentChange = 0
     else:
         percentChange = ((distanceBC - distanceAB) / distanceAB) * 100
-    # Parametri per rilevare uno smash
-    limitChange = 40 # La variazione percentuale minima per considerare uno smash
-    limitXVariation = 30 #limite per la variazione orizzontale
-    minDistance=40 # variazione fissa
+    
     if percentChange > limitChange:
         # Inoltre, verifica se la variazione in X è piccola
         deltaXAB = abs(B[0] - A[0])
@@ -42,19 +131,18 @@ def checkSmash(A,B,C):
                 return True
     return False
 def checkBounce(A,B,C,D):
-    if(distanceCalculator(B,C)<8):
+    if(distanceCalculator(B,C)<limitCollapse):
         B = ((B[0] + C[0]) / 2, (B[1] + C[1]) / 2)
         C = D
         degrees=degreeCalc(A,B,C)
     degrees=degreeCalc(A,B,C)
-    limitDegrees=40
-    limitYVariation=8
+   
     #se la pallina precedente o successiva è fuori dallo schermo, non faccio nessun conto
     if(A[1]==0 or C[1]==0):
         return 0
     #indetificare quando la pallina cambia direzione significativamente
     elif limitDegrees<degrees<180-limitDegrees:
-        if((distanceCalculator(A,B)+distanceCalculator(B,C)>15)and distanceCalculator(A,B)>3 and distanceCalculator(B,C)>3):
+        if((distanceCalculator(A,B)+distanceCalculator(B,C)>limitSumDistanceDegrees)and distanceCalculator(A,B)>limitSingleDistanceDegrees and distanceCalculator(B,C)>limitSingleDistanceDegrees):
             return 2 #Marca il frame come variazione di angolo
     # Identificare un cambio di direzione in Y (la pallina cambia velocità in verticale)
     elif (A[1] < B[1] > C[1]) or (A[1] > B[1] < C[1]) and (abs(B[1] - A[1]) >= limitYVariation or abs(B[1] - C[1]) >= limitYVariation):
@@ -64,7 +152,9 @@ def checkBounce(A,B,C,D):
     return 0
 
 
-def bouncerDetector(predicted_csv):
+def bouncerDetector(predicted_csv,preset=1):
+    
+    setPreset(preset)
     # Converti l'input in un DataFrame
     predicted_csv = pd.DataFrame(predicted_csv)
 
@@ -79,7 +169,6 @@ def bouncerDetector(predicted_csv):
         C = (predicted_X[i+1], predicted_Y[i+1])  # Punto successivo
         D = (predicted_X[i+2], predicted_Y[i+2])  # Punto successivo
 
-        
         # Applica il controllo dei rimbalzi
         predicted_csv.loc[i,'Bounce'] = checkBounce(A, B, C, D)
         # Evita doppi rimbalzi consecutivi

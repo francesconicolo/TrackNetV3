@@ -86,6 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--output_video', action='store_true', default=False, help='whether to output video with predicted trajectory')
     parser.add_argument('--traj_len', type=int, default=8, help='length of trajectory to draw on video')
     parser.add_argument('--algorithm', type=str, default='custom',choices=['isolationForest','custom','dbscan','lof','kMeans','oneClassSVM','knn','customOutlier'], help='Algorithm for scan dataset')
+    parser.add_argument('--preset', type=int, default=1, help='Preset for scan bounce')
     
     args = parser.parse_args()
 
@@ -95,22 +96,25 @@ if __name__ == '__main__':
     video_range = args.video_range if args.video_range else None
     large_video = args.large_video
     algorithm =args.algorithm
+    preset=args.preset
     out_csv_file = os.path.join(args.save_dir, f'{video_name}/{video_name}_ball_{algorithm}.csv')
     out_video_file = os.path.join(args.save_dir, f'{video_name}/{video_name}_{algorithm}.mp4')
+    out_score_file= os.path.join(args.save_dir, f'{video_name}/{video_name}_score.txt')
+    print(f'{video_name} starting...')
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
     os.makedirs(os.path.dirname(out_csv_file), exist_ok=True)
     os.makedirs(os.path.dirname(out_video_file), exist_ok=True)
     
     # Load model
-    tracknet_ckpt = torch.load(args.tracknet_file)
+    tracknet_ckpt = torch.load(args.tracknet_file,weights_only=True)
     tracknet_seq_len = tracknet_ckpt['param_dict']['seq_len']
     bg_mode = tracknet_ckpt['param_dict']['bg_mode']
     tracknet = get_model('TrackNet', tracknet_seq_len, bg_mode).cuda()
     tracknet.load_state_dict(tracknet_ckpt['model'])
 
     if args.inpaintnet_file:
-        inpaintnet_ckpt = torch.load(args.inpaintnet_file)
+        inpaintnet_ckpt = torch.load(args.inpaintnet_file,weights_only=True)
         inpaintnet_seq_len = inpaintnet_ckpt['param_dict']['seq_len']
         inpaintnet = get_model('InpaintNet').cuda()
         inpaintnet.load_state_dict(inpaintnet_ckpt['model'])
@@ -314,7 +318,27 @@ if __name__ == '__main__':
     pred_dict = inpaint_pred_dict if inpaintnet is not None else tracknet_pred_dict
 
     # Aggiunge la colonna outliers in base al metodo di analisi passato
-    pred_dict=dataAnalysis(pred_dict,video_name,algorithm)
+    pred_dict,scoreEur,scoreOutlier,tracknetScore=dataAnalysis(pred_dict,video_name,preset,args.video_file,algorithm)
+
+    with open(out_score_file, 'w') as file:
+        # Scrivi del testo nel file
+        file.write("Precision: "+str(scoreEur[0]*100)+"\n")
+        file.write("Recall: "+str(scoreEur[1]*100)+"\n")
+        file.write("F1: "+str(scoreEur[2]*100)+"\n")
+        file.write("#### Senza Errori tracking ####\n")
+        file.write("Precision: "+str(scoreEur[3]*100)+"\n")
+        file.write("F1: "+str(scoreEur[4]*100)+"\n")
+        file.write("#### Score Outlier detector ####\n")
+        file.write("Precision: "+str(scoreOutlier[0]*100)+"\n")
+        file.write("Recall: "+str(scoreOutlier[1]*100)+"\n")
+        file.write("F1: "+str(scoreOutlier[2]*100)+"\n")
+        file.write("#### TrackNet-Score ####\n")
+        file.write("FrameTotali: "+str(tracknetScore[0])+"\n")
+        file.write("Frame sbagliati: "+str(tracknetScore[1])+"\n")
+        file.write("Percent Score: "+str(tracknetScore[2])+"\n")
+
+    print("File score,scritto con successo.")
+
     write_pred_csv(pred_dict, save_file=out_csv_file)
 
     # Write video with predicted coordinates
